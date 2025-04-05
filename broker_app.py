@@ -26,6 +26,7 @@ if API_KEY:
         "hl": "ru",
         "gl": "ru",
         "tbm": "nws",
+        "tbs": "cdr:1,cd_min:4/1/2023,cd_max:12/15/2023",
         "api_key": API_KEY,
         "num": 100
     }
