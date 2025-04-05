@@ -1,8 +1,8 @@
+
 import streamlit as st
 import requests
-import pandas as pd
 from docx import Document
-from datetime import datetime
+from io import BytesIO
 import re
 
 st.title("Broker Monthly Report 2023 — Расширенный Word-отчёт")
@@ -127,8 +127,8 @@ if API_KEY:
         doc.add_paragraph(f"{comp}: {count}")
     doc.add_paragraph("В течение года наблюдается рост интереса к цифровым сервисам, стабильности платформ и прозрачности условий.")
 
-    report_path = "/mnt/data/Broker_Monthly_Report_2023.docx"
-    doc.save(report_path)
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
 
-    with open(report_path, "rb") as f:
-        st.download_button("Скачать Word-отчёт", f, file_name="Broker_Monthly_Report_2023.docx")
+    st.download_button("Скачать Word-отчёт", data=buffer, file_name="Broker_Monthly_Report_2023.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
