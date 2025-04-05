@@ -2,5 +2,4 @@ streamlit
 requests
 pandas
 nltk
-matplotlib
-seaborn
+python-docx
