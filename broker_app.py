@@ -4,125 +4,75 @@ from datetime import datetime
 from collections import Counter
 import nltk
 import re
-import matplotlib.pyplot as plt
-import seaborn as sns
+from docx import Document
 import streamlit as st
 
 nltk.download('punkt')
 nltk.download('stopwords')
 from nltk.corpus import stopwords
 
-st.title("Глобальный анализ новостей о брокерах / Global Broker News Analysis (2023)")
+st.title("Брокерские новости за 2023 год — Word-отчет")
 
-API_KEY = st.text_input("Введите ваш SerpAPI ключ / Enter your SerpAPI Key:")
+API_KEY = st.text_input("Введите SerpAPI ключ")
 
 if API_KEY:
-    queries = [
-        ("брокер OR брокерская компания OR брокерские услуги", "ru"),
-        ("broker OR brokerage firm OR brokerage services", "en")
-    ]
-
-    base_url = "https://serpapi.com/search"
-    headers = {"Accept": "application/json"}
-
+    query = "брокер OR брокерская компания OR брокерские услуги"
     months = [
-        ("01/01/2023", "01/31/2023"),
-        ("02/01/2023", "02/28/2023"),
-        ("03/01/2023", "03/31/2023"),
-        ("04/01/2023", "04/30/2023"),
-        ("05/01/2023", "05/31/2023"),
-        ("06/01/2023", "06/30/2023"),
-        ("07/01/2023", "07/31/2023"),
-        ("08/01/2023", "08/31/2023"),
-        ("09/01/2023", "09/30/2023"),
-        ("10/01/2023", "10/31/2023"),
-        ("11/01/2023", "11/30/2023"),
-        ("12/01/2023", "12/15/2023")
+        ("01/01/2023", "01/31/2023", "Январь"),
+        ("02/01/2023", "02/28/2023", "Февраль"),
+        ("03/01/2023", "03/31/2023", "Март"),
+        ("04/01/2023", "04/30/2023", "Апрель")
     ]
 
-    all_news = []
+    all_data = []
 
-    for query, lang in queries:
-        for start, end in months:
-            params = {
-                "q": query,
-                "hl": lang,
-                "tbm": "nws",
-                "tbs": f"cdr:1,cd_min:{start},cd_max:{end}",
-                "api_key": API_KEY,
-                "num": 100
-            }
-            response = requests.get(base_url, params=params, headers=headers)
-            results = response.json()
+    for start, end, label in months:
+        params = {
+            "q": query,
+            "hl": "ru",
+            "tbm": "nws",
+            "tbs": f"cdr:1,cd_min:{start},cd_max:{end}",
+            "api_key": API_KEY,
+            "num": 100
+        }
+        response = requests.get("https://serpapi.com/search", params=params)
+        results = response.json()
+        texts = [n.get("snippet", "") for n in results.get("news_results", [])]
+        tokens = nltk.word_tokenize(" ".join(texts).lower())
+        filtered = [w for w in tokens if w.isalpha() and w not in stopwords.words('russian') and len(w) > 3]
+        word_freq = Counter(filtered).most_common(5)
+        companies = ["freedom", "финам", "тинькофф", "сбер", "открытие"]
+        mentions = {c: sum(t.lower().count(c) for t in texts) for c in companies}
+        pos_words = ["прибыль", "рост", "успешно", "инвестиции"]
+        neg_words = ["убыток", "снижение", "штраф", "проблема"]
+        pos = sum(" ".join(texts).count(w) for w in pos_words)
+        neg = sum(" ".join(texts).count(w) for w in neg_words)
 
-            for news in results.get("news_results", []):
-                title = news.get("title")
-                link = news.get("link")
-                snippet = news.get("snippet", "")
-                source = news.get("source", "")
-                date_str = news.get("date", "")
-                try:
-                    news_date = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
-                except:
-                    news_date = None
+        all_data.append({
+            "month": label,
+            "count": len(texts),
+            "pos": pos,
+            "neg": neg,
+            "words": word_freq,
+            "companies": mentions
+        })
 
-                if news_date:
-                    all_news.append({
-                        "Источник / Source": source,
-                        "Заголовок / Title": title,
-                        "Ссылка / Link": link,
-                        "Описание / Snippet": snippet,
-                        "Дата / Date": news_date.date()
-                    })
+    # Генерация Word-документа
+    doc = Document()
+    doc.add_heading("Анализ брокерских новостей за 2023 год", 0)
 
-    df = pd.DataFrame(all_news)
+    for item in all_data:
+        doc.add_heading(item["month"], level=1)
+        doc.add_paragraph(f"Количество новостей: {item['count']}")
+        doc.add_paragraph(f"Позитивные упоминания: {item['pos']}")
+        doc.add_paragraph(f"Негативные упоминания: {item['neg']}")
+        doc.add_paragraph("Топ-слова: " + ", ".join([f"{w[0]} ({w[1]})" for w in item["words"]]))
+        company_line = ", ".join([f"{k}: {v}" for k, v in item["companies"].items() if v > 0]) or "нет"
+        doc.add_paragraph("Упомянутые компании: " + company_line)
 
-    if not df.empty:
-        st.subheader("Найденные глобальные новости / Global Broker News")
-        st.dataframe(df)
+    word_path = "/mnt/data/broker_report_2023.docx"
+    doc.save(word_path)
 
-        all_text = " ".join(df["Описание / Snippet"].tolist()).lower()
-        tokens = nltk.word_tokenize(re.sub(r'[^а-яА-Яa-zA-Z]', ' ', all_text))
-        stop_words = set(stopwords.words('russian')) | set(stopwords.words('english'))
-        filtered_tokens = [word for word in tokens if word not in stop_words and len(word) > 2]
-
-        word_freq = Counter(filtered_tokens).most_common(15)
-
-        positive_words = ["рост", "успешно", "прибыль", "увеличение", "инвестиции", "growth", "profit", "investment", "success"]
-        negative_words = ["убыток", "снижение", "проблема", "отказ", "штраф", "loss", "decline", "problem", "penalty"]
-        pos_count = sum(all_text.count(w) for w in positive_words)
-        neg_count = sum(all_text.count(w) for w in negative_words)
-
-        companies = ["freedom", "финам", "тинькофф", "атфбанк", "halyk", "сбер", "открытие", "alpari", "interactive brokers"]
-        df_mentions = pd.DataFrame(columns=["Компания / Company", "Дата / Date", "Упоминаний / Mentions"])
-
-        for company in companies:
-            for idx, row in df.iterrows():
-                text = row["Описание / Snippet"].lower()
-                count = text.count(company)
-                if count > 0:
-                    df_mentions.loc[len(df_mentions)] = [company, row["Дата / Date"], count]
-
-        st.subheader("Часто встречающиеся слова / Frequent Words")
-        words, counts = zip(*word_freq)
-        fig1, ax1 = plt.subplots()
-        sns.barplot(x=list(words), y=list(counts), ax=ax1)
-        plt.xticks(rotation=45)
-        st.pyplot(fig1)
-
-        st.subheader("Оценка тональности / Sentiment Estimate")
-        fig2, ax2 = plt.subplots()
-        sns.barplot(x=["Позитив / Positive", "Негатив / Negative"], y=[pos_count, neg_count], palette="coolwarm", ax=ax2)
-        st.pyplot(fig2)
-
-        if not df_mentions.empty:
-            df_mentions["Дата / Date"] = pd.to_datetime(df_mentions["Дата / Date"])
-            st.subheader("Упоминания компаний по времени / Company Mentions Over Time")
-            fig3, ax3 = plt.subplots()
-            sns.lineplot(data=df_mentions, x="Дата / Date", y="Упоминаний / Mentions", hue="Компания / Company", marker="o", ax=ax3)
-            plt.xticks(rotation=45)
-            st.pyplot(fig3)
-        else:
-            st.info("Недостаточно данных для отображения упоминаний компаний / Not enough data for mentions chart.")
-    else:
-        st.warning("Новости не найдены / No news found.")
+    st.success("Word-отчет успешно создан!")
+    with open(word_path, "rb") as f:
+        st.download_button("Скачать Word-отчет", f, file_name="broker_report_2023.docx")
