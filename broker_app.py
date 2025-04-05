@@ -7,8 +7,10 @@ import re
 from docx import Document
 import streamlit as st
 
+# Исправление ошибки: загрузка ресурсов NLTK
 nltk.download('punkt')
 nltk.download('stopwords')
+
 from nltk.corpus import stopwords
 
 st.title("Брокерские новости за 2023 год — Word-отчет")
@@ -57,7 +59,6 @@ if API_KEY:
             "companies": mentions
         })
 
-    # Генерация Word-документа
     doc = Document()
     doc.add_heading("Анализ брокерских новостей за 2023 год", 0)
 
@@ -70,7 +71,7 @@ if API_KEY:
         company_line = ", ".join([f"{k}: {v}" for k, v in item["companies"].items() if v > 0]) or "нет"
         doc.add_paragraph("Упомянутые компании: " + company_line)
 
-    word_path = "/mnt/data/broker_report_2023.docx"
+    word_path = "/mnt/data/broker_report_2023_fixed.docx"
     doc.save(word_path)
 
     st.success("Word-отчет успешно создан!")
